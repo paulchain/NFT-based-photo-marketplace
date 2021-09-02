@@ -55,7 +55,7 @@ contract PhotoNFTTradable {
      */
     function openTrade(PhotoNFT photoNFT, uint256 _photoId) public {
         photoNFTData.updateStatus(photoNFT, "Open");
-
+        photoNFTData.updatePrice(photoNFT, 3);
         Trade storage trade = trades[_photoId];
         require(
             msg.sender == trade.seller,
@@ -63,7 +63,9 @@ contract PhotoNFTTradable {
         );
         photoNFT.transferFrom(msg.sender, address(this), trade.photoId);
         trades[_photoId].status = "Open";
+        trades[_photoId].photoPrice = 3;
         emit TradeStatusChange(_photoId, "Open");
+        emit TradePriceChange(_photoId, 3);
     }
 
     /**

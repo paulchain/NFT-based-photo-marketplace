@@ -68,6 +68,18 @@ contract PhotoNFTData is PhotoNFTDataStorages {
         photo.status = _newStatus;  
     }
 
+    /**
+     * @notice - Update price when resale price in gwei
+     */
+    function updatePrice(PhotoNFT _photoNFT, uint memory _newPrice) public returns (bool) {
+        /// Identify photo's index
+        uint photoIndex = getPhotoIndex(_photoNFT);
+
+        /// Update metadata of a photoNFT of photo
+        Photo storage photo = photos[photoIndex];
+        photo.photoPrice = _newPrice;  
+    }
+
 
     ///-----------------
     /// Getter methods

@@ -38,10 +38,24 @@ module.exports = {
       skipDryRun: true,     // Skip dry run before migrations? (default: false for public nets)
       //from: process.env.DEPLOYER_ADDRESS
     },
+    fantom: {
+      provider: () => new HDWalletProvider(mnemonic, "https://rpcapi.fantom.network"),
+      network_id: 250,
+      gas: 7500000,
+      gasPrice: 5000000000, // 5 gwei,
+      skipDryRun: true,     // Skip dry run before migrations? (default: false for public nets)
+      from: process.env.DEPLOYER_ADDRESS
+    },
     // main ethereum network(mainnet)
+    // live: {
+    //   provider: () => new HDWalletProvider(mnemonic, "https://mainnet.infura.io/v3/" + process.env.INFURA_KEY),
+    //   network_id: 1,
+    //   gas: 5500000,
+    //   gasPrice: 2000000000 // 2 gwei
+    // },
     live: {
-      provider: () => new HDWalletProvider(mnemonic, "https://mainnet.infura.io/v3/" + process.env.INFURA_KEY),
-      network_id: 1,
+      provider: () => new HDWalletProvider(mnemonic, "https://rpc.ftm.tools"),
+      network_id: 250,
       gas: 5500000,
       gasPrice: 2000000000 // 2 gwei
     },
@@ -52,6 +66,14 @@ module.exports = {
       skipDryRun: true,
       gasPrice: 5000000000
     }
+    // local: {
+    //   host: 'https://rpcapi.fantom.network',
+    //   port: '*',
+    //   network_id: 250,
+    //   skipDryRun: true,
+    //   gasPrice: 5000000000
+    // }
+    
   },
   compilers: {
     solc: {
