@@ -1,5 +1,5 @@
 const PhotoNFTFactory = artifacts.require("./PhotoNFTFactory.sol");
-const PhotoNFTMarketPlace = artifacts.require("./PhotoNFTMarketPlace.sol");
+const PhotoNFTMarketPlace = artifacts.require("PhotoNFTMarketplace");
 const PhotoNFTData = artifacts.require("./PhotoNFTData.sol");
 
 const _photoNFTMarketPlace = PhotoNFTMarketPlace.address;

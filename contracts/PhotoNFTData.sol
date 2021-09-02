@@ -12,6 +12,12 @@ contract PhotoNFTData is PhotoNFTDataStorages {
 
     address[] public photoAddresses;
 
+    mapping(address => uint256) public priceTick;
+
+    mapping(address => mapping(uint256 => uint256)) public priceHistory;
+
+    event UpdatePrice(address indexed owner, address indexed nft, uint256 indexed newPrice);
+
     constructor() public {}
 
     /**
@@ -40,7 +46,26 @@ contract PhotoNFTData is PhotoNFTDataStorages {
         photos.push(photo);
 
         /// Update photoAddresses
-        photoAddresses = _photoAddresses;     
+        photoAddresses = _photoAddresses;
+    }
+
+    /**
+     * @notice only owner able to update price
+     */
+    function updatePrice(uint256 index, uint256 newPrice) public returns(bool){
+        Photo memory photo = photos[index];
+        address nftAddress = address(photo.photoNFT);
+        require(photo.ownerAddress == msg.sender, "You aren't owner");
+        uint256 tick = priceTick[nftAddress] + 1;
+        // Store price history
+        priceTick[nftAddress] += tick;
+        priceHistory[nftAddress][tick] = photo.photoPrice;
+        // Update price
+        photo.photoPrice = newPrice;
+        // Update the photo
+        photos[index] = photo;
+        emit UpdatePrice(msg.sender, photo.ownerAddress, newPrice);
+        return true;
     }
 
     /**
@@ -53,7 +78,7 @@ contract PhotoNFTData is PhotoNFTDataStorages {
         /// Update metadata of a photoNFT of photo
         Photo storage photo = photos[photoIndex];
         require (_newOwner != address(0), "A new owner address should be not empty");
-        photo.ownerAddress = _newOwner;  
+        photo.ownerAddress = _newOwner;
     }
 
     /**
@@ -65,7 +90,7 @@ contract PhotoNFTData is PhotoNFTDataStorages {
 
         /// Update metadata of a photoNFT of photo
         Photo storage photo = photos[photoIndex];
-        photo.status = _newStatus;  
+        photo.status = _newStatus;
     }
 
 

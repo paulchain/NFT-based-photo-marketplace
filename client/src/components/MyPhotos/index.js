@@ -18,13 +18,13 @@ export default class MyPhotos extends Component {
           accounts: null,
           currentAccount: null,
           route: window.location.pathname.replace("/", ""),
-
+          photoPrice: null,
           /////// NFT
           allPhotos: []
         };
 
         //this.handlePhotoNFTAddress = this.handlePhotoNFTAddress.bind(this);
-
+        this.handleNFTPrice = this.handleNFTPrice.bind(this);
         this.putOnSale = this.putOnSale.bind(this);
         this.cancelOnSale = this.cancelOnSale.bind(this);
     }
@@ -36,6 +36,9 @@ export default class MyPhotos extends Component {
     //     this.setState({ valuePhotoNFTAddress: event.target.value });
     // }
 
+    handleNFTPrice = async (e) => {
+      this.setState({ photoPrice: e.target.value });
+    }
 
     ///---------------------------------------------------------
     /// Functions put a photo NFT on sale or cancel it on sale 
@@ -87,14 +90,44 @@ export default class MyPhotos extends Component {
         console.log('=== response of cancelTrade ===', txReceipt2);
     }
 
+    updatePrice = async (e) => {
+      const { web3, accounts, photoNFTMarketplace, photoNFTData, PHOTO_NFT_MARKETPLACE } = this.state;
+
+      console.log('=== value of putOnSale ===', e.target.value);
+      console.log('=== PHOTO_NFT_MARKETPLACE ===', PHOTO_NFT_MARKETPLACE);
+
+      const PHOTO_NFT = e.target.value;
+
+      const photoIndex = await photoNFTData.methods.getPhotoIndex(PHOTO_NFT).call();
+
+      const txReceipt = await photoNFTData.methods.updatePrice(photoIndex, web3.utils.toWei(this.state.photoPrice, 'ether')).send({
+        from: accounts[0]
+      });
+      console.log('=== response of openTrade ===', txReceipt);
+  }
 
     ///------------------------------------- 
     /// NFT（Always load listed NFT data）
     ///-------------------------------------
     getAllPhotos = async () => {
-        const { photoNFTData } = this.state
-
+        const { web3, photoNFTData, accounts } = this.state
         const allPhotos = await photoNFTData.methods.getAllPhotos().call()
+        for(let i = 0; i < allPhotos.length; i+=1){
+          const photo = allPhotos[i];
+          const priceHistory = [];
+          const priceTick = await photoNFTData.methods.priceTick(photo.photoNFT).call();
+          if(priceTick > 0){
+            for(let i = 1; i < priceTick; i++){
+              const price = web3.utils.fromWei(await photoNFTData.methods.priceHistory(photo.photoNFT, i).call(), 'ether');
+              priceHistory.push(price);
+            }
+          }
+          allPhotos[i] = {
+            ...photo,
+            priceTick,
+            priceHistory
+          }
+        }
         console.log('=== allPhotos ===', allPhotos)
 
         this.setState({ allPhotos: allPhotos })
@@ -233,6 +266,7 @@ export default class MyPhotos extends Component {
 
     render() {
         const { web3, allPhotos, currentAccount } = this.state;
+        // <p>Price: { web3.utils.fromWei(`${photo.photoPrice}`, 'ether') } ETH</p>
 
         return (
             <div className={styles.contracts}>
@@ -262,8 +296,25 @@ export default class MyPhotos extends Component {
                               <span style={{ padding: "20px" }}></span>
 
                               <p>Photo Name: { photo.photoNFTName }</p>
+                              
+                              <p>Price History:</p>
+                              <ul>
+                              {
+                                photo.priceHistory.map((e,i) => <li key={`key-${i}`}>{e} ETH</li>)
+                              }
+                              </ul>
+                              <Field label="Price in ETH:">
+                                    <Input
+                                        type="text"
+                                        width={1}
+                                        placeholder="e.g) price in ETH"
+                                        required={true}
+                                        value={ this.state.photoPrice === null ? web3.utils.fromWei(`${photo.photoPrice}`, 'ether') : this.state.photoPrice } 
+                                        onChange={this.handleNFTPrice}
+                                    />
+                              </Field>
 
-                              <p>Price: { web3.utils.fromWei(`${photo.photoPrice}`, 'ether') } ETH</p>
+                              <Button size={'medium'} width={1} value={ photo.photoNFT } onClick={this.updatePrice}>Update Price</Button>
 
                               <p>Owner: { photo.ownerAddress }</p>
                               

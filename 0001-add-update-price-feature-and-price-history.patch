@@ -1,0 +1,242 @@
+From 1d14acf592c65f1681102d64bc9a8735335905b3 Mon Sep 17 00:00:00 2001
+From: unknow author <unknow@example.com>
+Date: Thu, 2 Sep 2021 17:34:44 +0700
+Subject: [PATCH] add update price feature and price history
+
+---
+ client/src/components/MyPhotos/index.js    | 63 +++++++++++++++++++---
+ contracts/PhotoNFTData.sol                 | 33 ++++++++++--
+ contracts/PhotoNFTFactory.sol              |  4 +-
+ migrations/4_deploy_PhotoNFTMarketPlace.js |  2 +-
+ migrations/5_deploy_PhotoNFTFactory.js     |  2 +-
+ 5 files changed, 90 insertions(+), 14 deletions(-)
+
+diff --git a/client/src/components/MyPhotos/index.js b/client/src/components/MyPhotos/index.js
+index ed1e277..6c95fe0 100644
+--- a/client/src/components/MyPhotos/index.js
++++ b/client/src/components/MyPhotos/index.js
+@@ -18,13 +18,13 @@ export default class MyPhotos extends Component {
+           accounts: null,
+           currentAccount: null,
+           route: window.location.pathname.replace("/", ""),
+-
++          photoPrice: null,
+           /////// NFT
+           allPhotos: []
+         };
+ 
+         //this.handlePhotoNFTAddress = this.handlePhotoNFTAddress.bind(this);
+-
++        this.handleNFTPrice = this.handleNFTPrice.bind(this);
+         this.putOnSale = this.putOnSale.bind(this);
+         this.cancelOnSale = this.cancelOnSale.bind(this);
+     }
+@@ -36,6 +36,9 @@ export default class MyPhotos extends Component {
+     //     this.setState({ valuePhotoNFTAddress: event.target.value });
+     // }
+ 
++    handleNFTPrice = async (e) => {
++      this.setState({ photoPrice: e.target.value });
++    }
+ 
+     ///---------------------------------------------------------
+     /// Functions put a photo NFT on sale or cancel it on sale 
+@@ -87,14 +90,44 @@ export default class MyPhotos extends Component {
+         console.log('=== response of cancelTrade ===', txReceipt2);
+     }
+ 
++    updatePrice = async (e) => {
++      const { web3, accounts, photoNFTMarketplace, photoNFTData, PHOTO_NFT_MARKETPLACE } = this.state;
++
++      console.log('=== value of putOnSale ===', e.target.value);
++      console.log('=== PHOTO_NFT_MARKETPLACE ===', PHOTO_NFT_MARKETPLACE);
++
++      const PHOTO_NFT = e.target.value;
++
++      const photoIndex = await photoNFTData.methods.getPhotoIndex(PHOTO_NFT).call();
++
++      const txReceipt = await photoNFTData.methods.updatePrice(photoIndex, web3.utils.toWei(this.state.photoPrice, 'ether')).send({
++        from: accounts[0]
++      });
++      console.log('=== response of openTrade ===', txReceipt);
++  }
+ 
+     ///------------------------------------- 
+     /// NFT（Always load listed NFT data）
+     ///-------------------------------------
+     getAllPhotos = async () => {
+-        const { photoNFTData } = this.state
+-
++        const { web3, photoNFTData, accounts } = this.state
+         const allPhotos = await photoNFTData.methods.getAllPhotos().call()
++        for(let i = 0; i < allPhotos.length; i+=1){
++          const photo = allPhotos[i];
++          const priceHistory = [];
++          const priceTick = await photoNFTData.methods.priceTick(photo.photoNFT).call();
++          if(priceTick > 0){
++            for(let i = 1; i < priceTick; i++){
++              const price = web3.utils.fromWei(await photoNFTData.methods.priceHistory(photo.photoNFT, i).call(), 'ether');
++              priceHistory.push(price);
++            }
++          }
++          allPhotos[i] = {
++            ...photo,
++            priceTick,
++            priceHistory
++          }
++        }
+         console.log('=== allPhotos ===', allPhotos)
+ 
+         this.setState({ allPhotos: allPhotos })
+@@ -233,6 +266,7 @@ export default class MyPhotos extends Component {
+ 
+     render() {
+         const { web3, allPhotos, currentAccount } = this.state;
++        // <p>Price: { web3.utils.fromWei(`${photo.photoPrice}`, 'ether') } ETH</p>
+ 
+         return (
+             <div className={styles.contracts}>
+@@ -262,8 +296,25 @@ export default class MyPhotos extends Component {
+                               <span style={{ padding: "20px" }}></span>
+ 
+                               <p>Photo Name: { photo.photoNFTName }</p>
+-
+-                              <p>Price: { web3.utils.fromWei(`${photo.photoPrice}`, 'ether') } ETH</p>
++                              
++                              <p>Price History:</p>
++                              <ul>
++                              {
++                                photo.priceHistory.map((e,i) => <li key={`key-${i}`}>{e} ETH</li>)
++                              }
++                              </ul>
++                              <Field label="Price in ETH:">
++                                    <Input
++                                        type="text"
++                                        width={1}
++                                        placeholder="e.g) price in ETH"
++                                        required={true}
++                                        value={ this.state.photoPrice === null ? web3.utils.fromWei(`${photo.photoPrice}`, 'ether') : this.state.photoPrice } 
++                                        onChange={this.handleNFTPrice}
++                                    />
++                              </Field>
++
++                              <Button size={'medium'} width={1} value={ photo.photoNFT } onClick={this.updatePrice}>Update Price</Button>
+ 
+                               <p>Owner: { photo.ownerAddress }</p>
+                               
+diff --git a/contracts/PhotoNFTData.sol b/contracts/PhotoNFTData.sol
+index d1b0107..ecb538f 100644
+--- a/contracts/PhotoNFTData.sol
++++ b/contracts/PhotoNFTData.sol
+@@ -12,6 +12,12 @@ contract PhotoNFTData is PhotoNFTDataStorages {
+ 
+     address[] public photoAddresses;
+ 
++    mapping(address => uint256) public priceTick;
++
++    mapping(address => mapping(uint256 => uint256)) public priceHistory;
++
++    event UpdatePrice(address indexed owner, address indexed nft, uint256 indexed newPrice);
++
+     constructor() public {}
+ 
+     /**
+@@ -40,7 +46,26 @@ contract PhotoNFTData is PhotoNFTDataStorages {
+         photos.push(photo);
+ 
+         /// Update photoAddresses
+-        photoAddresses = _photoAddresses;     
++        photoAddresses = _photoAddresses;
++    }
++
++    /**
++     * @notice only owner able to update price
++     */
++    function updatePrice(uint256 index, uint256 newPrice) public returns(bool){
++        Photo memory photo = photos[index];
++        address nftAddress = address(photo.photoNFT);
++        require(photo.ownerAddress == msg.sender, "You aren't owner");
++        uint256 tick = priceTick[nftAddress] + 1;
++        // Store price history
++        priceTick[nftAddress] += tick;
++        priceHistory[nftAddress][tick] = photo.photoPrice;
++        // Update price
++        photo.photoPrice = newPrice;
++        // Update the photo
++        photos[index] = photo;
++        emit UpdatePrice(msg.sender, photo.ownerAddress, newPrice);
++        return true;
+     }
+ 
+     /**
+@@ -53,7 +78,7 @@ contract PhotoNFTData is PhotoNFTDataStorages {
+         /// Update metadata of a photoNFT of photo
+         Photo storage photo = photos[photoIndex];
+         require (_newOwner != address(0), "A new owner address should be not empty");
+-        photo.ownerAddress = _newOwner;  
++        photo.ownerAddress = _newOwner;
+     }
+ 
+     /**
+@@ -65,7 +90,7 @@ contract PhotoNFTData is PhotoNFTDataStorages {
+ 
+         /// Update metadata of a photoNFT of photo
+         Photo storage photo = photos[photoIndex];
+-        photo.status = _newStatus;  
++        photo.status = _newStatus;
+     }
+ 
+ 
+@@ -110,4 +135,4 @@ contract PhotoNFTData is PhotoNFTDataStorages {
+         return photos;
+     }
+ 
+-}
++}
+\ No newline at end of file
+diff --git a/contracts/PhotoNFTFactory.sol b/contracts/PhotoNFTFactory.sol
+index 74461eb..364c803 100644
+--- a/contracts/PhotoNFTFactory.sol
++++ b/contracts/PhotoNFTFactory.sol
+@@ -5,7 +5,7 @@ import { SafeMath } from "./openzeppelin-solidity/contracts/math/SafeMath.sol";
+ import { Strings } from "./libraries/Strings.sol";
+ import { PhotoNFTFactoryStorages } from "./photo-nft-factory/commons/PhotoNFTFactoryStorages.sol";
+ import { PhotoNFT } from "./PhotoNFT.sol";
+-import { PhotoNFTMarketplace } from "./PhotoNFTMarketplace.sol";
++import { PhotoNFTMarketplace } from "./PhotoNFTMarketPlace.sol";
+ import { PhotoNFTData } from "./PhotoNFTData.sol";
+ 
+ 
+@@ -14,7 +14,7 @@ import { PhotoNFTData } from "./PhotoNFTData.sol";
+  */
+ contract PhotoNFTFactory is PhotoNFTFactoryStorages {
+     using SafeMath for uint256;
+-    using Strings for string;    
++    using Strings for string;
+ 
+     address[] public photoAddresses;
+     address PHOTO_NFT_MARKETPLACE;
+diff --git a/migrations/4_deploy_PhotoNFTMarketPlace.js b/migrations/4_deploy_PhotoNFTMarketPlace.js
+index 893bb56..fcd85cc 100644
+--- a/migrations/4_deploy_PhotoNFTMarketPlace.js
++++ b/migrations/4_deploy_PhotoNFTMarketPlace.js
+@@ -1,4 +1,4 @@
+-const PhotoNFTMarketplace = artifacts.require("./PhotoNFTMarketplace.sol");
++const PhotoNFTMarketplace = artifacts.require("PhotoNFTMarketplace");
+ const PhotoNFTData = artifacts.require("./PhotoNFTData.sol");
+ 
+ const _photoNFTData = PhotoNFTData.address;
+diff --git a/migrations/5_deploy_PhotoNFTFactory.js b/migrations/5_deploy_PhotoNFTFactory.js
+index f7a19f2..156d1d9 100644
+--- a/migrations/5_deploy_PhotoNFTFactory.js
++++ b/migrations/5_deploy_PhotoNFTFactory.js
+@@ -1,5 +1,5 @@
+ const PhotoNFTFactory = artifacts.require("./PhotoNFTFactory.sol");
+-const PhotoNFTMarketPlace = artifacts.require("./PhotoNFTMarketPlace.sol");
++const PhotoNFTMarketPlace = artifacts.require("PhotoNFTMarketplace");
+ const PhotoNFTData = artifacts.require("./PhotoNFTData.sol");
+ 
+ const _photoNFTMarketPlace = PhotoNFTMarketPlace.address;
+-- 
+2.25.1
+
