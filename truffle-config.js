@@ -55,7 +55,7 @@ module.exports = {
   },
   compilers: {
     solc: {
-      //version: "0.5.16",  /// Final version of solidity-v0.5.x
+      version: "0.5.16",  /// Final version of solidity-v0.5.x
       settings: {
         optimizer: {
           enabled: true,
