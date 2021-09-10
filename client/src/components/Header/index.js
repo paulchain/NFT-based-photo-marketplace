@@ -41,7 +41,7 @@ const Header = (props) => {
           )}
         </ul>
       </nav>
-      <div className={styles.connectWallet}>
+      {/* <div className={styles.connectWallet}>
         {web3 && accounts && accounts.length ? (
           <span>accounts[0]</span>
         ) : (
@@ -49,7 +49,7 @@ const Header = (props) => {
             Connect Wallet
           </a>
         )}
-      </div>
+      </div> */}
     </div>
   )
 }
